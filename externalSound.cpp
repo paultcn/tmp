@@ -86,6 +86,7 @@ static char* s_buf = NULL;
 //avas gendata buffer
 static char* s_avasDataPing = NULL;
 static char* s_avasDataPong = NULL;
+static char* s_avasDataLastBackup = NULL;
 static PingPongBuffer_t s_PPBuf;	
 static int tmp_value[20]={0};
 //static float tmp_f[10]={0};
@@ -178,8 +179,6 @@ void* avas_gendata(void * args)
 		{
 			printf("speed = %dkm/h, gear = %d\n", param.nCurSpeed, param.nCurGear);
 		}
-        // wait the lastest gen data be reading finished, then can overwrite.
-		pthread_mutex_lock(&lastest_read_lock);
 		
 		/* avas data generate to play */
 		for(unsigned int i=0; i< AVAS_GENDATA_BUFFSIZE/sizeof(int32_t) / numberofsample; i++)
@@ -203,6 +202,9 @@ void* avas_gendata(void * args)
 			AvasLib_GenData((int32_t *)buffer, (int32_t *)outdata+i*numberofsample);
 		}		
 		PingPongBuffer_SetWriteDone(&s_PPBuf);
+        // wait the lastest gen data be reading finished, then can overwrite.
+		pthread_mutex_lock(&lastest_read_lock);
+		memcpy(s_avasDataLastBackup, outdata, AVAS_GENDATA_BUFFSIZE);
 		pthread_mutex_unlock(&lastest_read_lock);
 
 	}
@@ -250,7 +252,7 @@ int writeData(int nframes, void *arg, int size)
 	if ( bGotReadbuf == false )
 	{
 		pthread_mutex_lock(&lastest_read_lock);
-	    outdata = s_PPBuf.buffer[s_lastest_readIndex];
+	    outdata = s_avasDataLastBackup;
 	}
 	else
 	{
@@ -271,7 +273,6 @@ int writeData(int nframes, void *arg, int size)
 			*pDestBuf[ch]++ = pSrcBuffer[ch*2+i+1];
 		}
 	}
-    PingPongBuffer_SetReadDone(&s_PPBuf);
 	if ( DebugLevel > 4 )
 	{
 	  printf("%s: play total:%d ===> %d\n", __func__, s_bufLen, s_bufIdx);
@@ -279,6 +280,10 @@ int writeData(int nframes, void *arg, int size)
 	if ( bGotReadbuf == false )
 	{
 		pthread_mutex_unlock(&lastest_read_lock);
+	}
+	else
+	{
+        PingPongBuffer_SetReadDone(&s_PPBuf);
 	}
 
     return 0;
@@ -315,6 +320,20 @@ void external_sound_init()
 	{
 	    memset(s_avasDataPong, 0, AVAS_GENDATA_BUFFSIZE);
 	}
+	s_avasDataLastBackup = (char*)malloc(AVAS_GENDATA_BUFFSIZE);
+	if ( s_avasDataLastBackup == NULL )
+	{
+		if ( DebugLevel > 4 )
+		{
+		  printf("The s_avasDataLastBackup malloc failed !!!\n");
+		}
+	    return;
+	}
+	else
+	{
+	    memset(s_avasDataLastBackup, 0, AVAS_GENDATA_BUFFSIZE);
+	}
+	
 	PingPongBuffer_Init(&s_PPBuf, s_avasDataPing, s_avasDataPong);
     initExternalSound(external_sound_type_avas);
 }
@@ -325,6 +344,8 @@ void external_sound_destroy()
 		free(s_avasDataPing);
 	if (s_avasDataPong)
 		free(s_avasDataPong);
+	if (s_avasDataLastBackup)
+		free(s_avasDataLastBackup);
 	pthread_mutex_destroy(&lastest_read_lock);
 }
 void external_sound_play(char *wav_filename)
