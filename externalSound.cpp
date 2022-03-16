@@ -203,9 +203,9 @@ void* avas_gendata(void * args)
 		}		
 		PingPongBuffer_SetWriteDone(&s_PPBuf);
         // wait the lastest gen data be reading finished, then can overwrite.
-		pthread_mutex_lock(&lastest_read_lock);
-		memcpy(s_avasDataLastBackup, outdata, AVAS_GENDATA_BUFFSIZE);
-		pthread_mutex_unlock(&lastest_read_lock);
+		//pthread_mutex_lock(&lastest_read_lock);
+		//memcpy(s_avasDataLastBackup, outdata, AVAS_GENDATA_BUFFSIZE);
+		//pthread_mutex_unlock(&lastest_read_lock);
 
 	}
 	if (buffer) free(buffer);
@@ -251,12 +251,13 @@ int writeData(int nframes, void *arg, int size)
 	// got new buffer falied, read the lastest data buff.
 	if ( bGotReadbuf == false )
 	{
-		pthread_mutex_lock(&lastest_read_lock);
+		//pthread_mutex_lock(&lastest_read_lock);
 	    outdata = s_avasDataLastBackup;
 	}
 	else
 	{
     	s_lastest_readIndex = s_PPBuf.readIndex;
+		memcpy(s_avasDataLastBackup, outdata, AVAS_GENDATA_BUFFSIZE);
 	}
     pSrcBuffer = outdata ? (char*)outdata : s_buf+s_bufIdx;
 	
@@ -279,7 +280,7 @@ int writeData(int nframes, void *arg, int size)
 	}
 	if ( bGotReadbuf == false )
 	{
-		pthread_mutex_unlock(&lastest_read_lock);
+		//pthread_mutex_unlock(&lastest_read_lock);
 	}
 	else
 	{
